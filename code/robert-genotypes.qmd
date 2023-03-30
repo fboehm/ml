@@ -1,0 +1,74 @@
+---
+title: "Sharing SNP genotype data with Robert Langefeld"
+format: gfm
+date: 2023-03-30
+author: "Fred Boehm"
+---
+
+Goal is to create a csv file with, say, 10,000 subjects and up to 10,000 SNPs. It will also include 
+a binary trait in the second column. The first column has subject IDs.
+
+I'll share some of the UKB data, but I need to think about which chromosome and which binary trait to use.
+
+I'll then use plink to subset the subjects and SNPs to get a set of plink files with the desired number of subjects and SNPs.
+
+From there, I'll read the plink files into R and output a csv file.
+
+Robert indicated that he wants the data to include a genomic region where there is a strong association for the binary trait that I'll include in the csv.
+
+To verify that there is an association signal in the csv file, I'll do a quick SNP association analysis.
+
+Here, I download UKB summary statistics for essential hypertension (I10). I then examine the p-values.
+
+
+```{bash, eval = FALSE}
+wget https://broad-ukb-sumstats-us-east-1.s3.amazonaws.com/round2/additive-tsvs/I10.gwas.imputed_v3.both_sexes.tsv.bgz -O dat/I10.gwas.imputed_v3.both_sexes.tsv.bgz
+```
+
+Looking at the p-values should tell me where the strongest association signal is.
+
+```{r}
+library(magrittr)
+dat <- vroom::vroom("dat/I10.gwas.imputed_v3.both_sexes.tsv.bgz")
+dat %>%
+    dplyr::filter(pval == min(pval, na.rm=TRUE))
+```
+
+Make a fam file for use with plink. Column 6 must be the binary HTN trait.
+
+
+
+```{r}
+#pheno_b_all <- cbind(PRCA, TA, TD2, CAD, RA,
+#                     BRCA, AS, MP, MDD, SS,
+#                     QU, HT, FFI, DFI, OS,
+#                     AN, GO, SAF, HA, TE,
+#                     T1B, VMS, MY, SN, ES)
+#save(pheno_b_all, file = paste0(comp_str, "02_pheno/05_pheno_b_clean.RData"))
+# ABOVE CODE IS FROM SHENG YANG. IT TELLS US THE ORDERING OF THE TRAITS IN THE BINARY PHENOTYPE FILE.
+load("/net/mulan/disk2/fredboe/research/ukb-intervals/02_pheno/05_pheno_b_clean.RData")
+# loads an object called pheno_b_all
+# HTN is column 12 per the list above
+pheno_b_all %>% dim()
+pheno_b_all[, 12] %>% table()
+# read old fam file
+old_fam_fn <- "/net/mulan/disk2/fredboe/research/ukb-intervals/hapmap3/chr11.fam"
+vroom::vroom(old_fam_fn, col_names = FALSE) %>%
+    dplyr::select(-X6) %>%
+    dplyr::mutate(X6 = pheno_b_all[, 12]) %>%
+    vroom::vroom_write(file = "dat/chr11.fam", col_names = FALSE)
+
+```
+
+
+```{bash}
+original_bed=/net/mulan/disk2/fredboe/research/ukb-intervals/hapmap3/chr11.bed
+original_bim=/net/mulan/disk2/fredboe/research/ukb-intervals/hapmap3/chr11.bim
+# make sym links to original bed & original bim
+ln -s ${original_bed} dat/chr11.bed
+ln -s ${original_bim} dat/chr11.bim
+```
+
+```{bash}
+
+```
